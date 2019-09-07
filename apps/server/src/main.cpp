@@ -54,7 +54,7 @@ void sendDepthData(tcp::iostream& stream, Kinect& kinect) {
     int frameWidth = colorFrame.getWidth();
 
     std::stringstream ss;
-    ss << "{\"height\":" << frameHeight << ", \"width\":" << frameWidth << ", \"colordata\":[";
+  ss << "{\"height\":" << frameHeight << ", \"width\":" << frameWidth << ", \"colordata\":[";
 
     for (int i = 0; i < frameHeight; i++) {
       ss << "[";

@@ -11,6 +11,10 @@ public:
   void initDevice();
   //void readFrameData(openni::VideoFrameRef *pFrame, bool readColor);
   void readFrames(openni::VideoFrameRef& depthFrame, openni::VideoFrameRef& colorFrame);
+  void setFrameListeners(
+    openni::VideoStream::NewFrameListener &depthListener,
+    openni::VideoStream::NewFrameListener &colorListener
+  );
   
 protected:
   openni::Device device;
@@ -18,5 +22,7 @@ protected:
   openni::VideoStream colorStream;
 
   openni::VideoStream** allStreams;
+
+  static int count;
 };
 #endif //_KINECT_HPP_

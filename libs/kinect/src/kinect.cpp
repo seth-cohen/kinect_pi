@@ -1,20 +1,42 @@
 #include "kinect.hpp"
+#include <iostream>
 
 using namespace openni;
 
 #define SAMPLE_READ_WAIT_TIMEOUT 2000
 
+int Kinect::count = 0;
+
 Kinect::Kinect() {
+  count++;
+  std::cout << "Number of Kinect Instances: " << count << std::endl;
+
   allStreams = new VideoStream*[2];
   allStreams[0] = &depthStream;
   allStreams[1] = &colorStream;
 }
 
 Kinect::~Kinect() {
+  std::cout << "shutting down" << std::endl;
+  
+  depthStream.stop();
+  depthStream.destroy();
+  
+  colorStream.stop();
+  colorStream.destroy();
+
+  device.close();
+
+  OpenNI::shutdown();
+  
   delete []allStreams;
 }
 
 void Kinect::initDevice() {
+  if (count > 1) {
+    std::cout << "Can't initialize more than one device" << std::endl;
+    return;
+  }
   // Initialize OpenNI Driver
   Status rc = OpenNI::initialize();
   if (rc != STATUS_OK) {
@@ -69,6 +91,14 @@ void Kinect::initDevice() {
     printf("Couldn't start the color stream\n%s\n", OpenNI::getExtendedError());
     return;
   }
+}
+
+void Kinect::setFrameListeners(
+  VideoStream::NewFrameListener &depthListener,
+  VideoStream::NewFrameListener &colorListener
+) {
+  depthStream.addNewFrameListener(&depthListener);
+  colorStream.addNewFrameListener(&colorListener);
 }
 
 void Kinect::readFrames(VideoFrameRef& depthFrame, VideoFrameRef& colorFrame) {
