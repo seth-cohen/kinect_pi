@@ -126,6 +126,8 @@ void Session::on_read(
 
     writer.Key("b");
     writer.Uint(i.b);
+
+    writer.EndObject();
   }
   writer.EndArray();
     
