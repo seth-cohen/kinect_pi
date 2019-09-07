@@ -1,3 +1,5 @@
+find_package(RapidJSON)
+
 add_library(boost_beast INTERFACE)
 target_include_directories(boost_beast
   SYSTEM
@@ -13,7 +15,8 @@ set_target_properties(simple_read PROPERTIES
   CXX_STANDARD 11)
 target_include_directories(simple_read
   PRIVATE
-    include)
+    include
+    RapidJSON::RapidJSON)
 target_sources(simple_read
   PRIVATE
     src/session.cpp

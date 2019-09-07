@@ -1,57 +1,66 @@
 #include "session.hpp"
 #include "utility.hpp"
 #include <OpenNI.h>
+#include <rapidjson/writer.h>
+#include <rapidjson/stringbuffer.h>
 
 #include <iomanip>
 
 using namespace openni;
+using namespace rapidjson;
 
-class PrintCallback : public VideoStream::NewFrameListener {
-public:
-  PrintCallback(const std::string& cbName, void *midValue)
-    :midValue(midValue)
-    ,name(cbName){};
+PrintCallback::PrintCallback(const std::string& cbName, std::vector<Point> &pts)
+  : name(cbName)
+  , pts(pts){};
 
-  void onNewFrame(VideoStream& stream) {
-    std::cout << "Ready to reeeead frame" << std::endl;
+void PrintCallback::onNewFrame(VideoStream& stream) {
+  std::cout << "Ready to reeeead frame" << std::endl;
 
-    stream.readFrame(&frame);
-    std::cout << "[" << std::setw(10) << frame.getTimestamp() << "]"
-	      << std::setw(10) << name << " - "
-	      << "sensor: " << frame.getSensorType() << std::endl;
+  stream.readFrame(&frame);
+  std::cout << "[" << std::setw(10) << frame.getTimestamp() << "]"
+	    << std::setw(10) << name << " - "
+	    << "sensor: " << frame.getSensorType() << std::endl;
 
+  CoordinateConverter converter;
+  int width = frame.getWidth();
+  int height = frame.getHeight();
 
-    int middleIndex = (frame.getHeight() + 1) * frame.getWidth() / 2;
-
-    switch (frame.getVideoMode().getPixelFormat()) {
-    case PIXEL_FORMAT_DEPTH_1_MM:
-    case PIXEL_FORMAT_DEPTH_100_UM:
-      *(DepthPixel*)midValue = ((DepthPixel*)frame.getData())[middleIndex];
-      break;
-    case PIXEL_FORMAT_RGB888:
-      *(RGB888Pixel*)midValue = ((RGB888Pixel*)frame.getData())[middleIndex];
-      break;
-    default:
-      std::cout << "unkown pixel format";
+  switch (frame.getVideoMode().getPixelFormat()) {
+  case PIXEL_FORMAT_DEPTH_1_MM:
+  case PIXEL_FORMAT_DEPTH_100_UM: {
+    DepthPixel *pDepth = (DepthPixel*)frame.getData();
+    for (int y = 0; y < height; ++y) {
+      for (int x = 0; x < width; ++x, ++pDepth) {
+	Point &p = pts[y*width + x];
+	converter.convertDepthToWorld(stream, x, y, *pDepth, &p.x, &p.y, &p.z);
+      }
     }
+    break;
   }
+  case PIXEL_FORMAT_RGB888: {
+    RGB888Pixel *pColor = (RGB888Pixel*)frame.getData();
+    for (int y = 0; y < height; ++y) {
+      for (int x = 0; x < width; ++x, ++pColor) {
+	Point &p = pts[y*width + x];
+	p.r = (*pColor).r;
+	p.g = (*pColor).g;
+	p.b = (*pColor).b;
+      }
+    }
+    break;
+  }
+  default:
+    std::cout << "unkown pixel format";
+  }
+}
 
-protected:
-  void *midValue;
-  VideoFrameRef frame;
-  std::string name;
-};
-
-  
 
 // Start the asynchronous operation
 void Session::run() {
   kinect.initDevice();
 
 
-  PrintCallback *depthPrinter = new PrintCallback("depth", &depth);
-  PrintCallback *colorPrinter = new PrintCallback("color", &pixel);
-  kinect.setFrameListeners(*depthPrinter, *colorPrinter);
+  kinect.setFrameListeners(depthListener, colorListener);
 
   // Accept the websocket handshake
   ws_.async_accept(
@@ -93,11 +102,36 @@ void Session::on_read(
   if(ec)
     fail(ec, "read");
 
+  StringBuffer s;
+  Writer<StringBuffer> writer(s);
+
+  writer.StartArray();                // Between StartArray()/EndArray(),
+  for (const auto &i : points) {
+    writer.StartObject();               // Between StartObject()/EndObject(), 
+      
+    writer.Key("x");                // output a key,
+    writer.Double(i.x);             // follow by a value.
+
+    writer.Key("y");
+    writer.Double(i.y);
+
+    writer.Key("z");
+    writer.Double(i.z);
+
+    writer.Key("r");
+    writer.Uint(i.r);
+      
+    writer.Key("g");
+    writer.Uint(i.g);
+
+    writer.Key("b");
+    writer.Uint(i.b);
+  }
+  writer.EndArray();
+    
+
   buffer_.consume(buffer_.size());
-  boost::beast::ostream(buffer_) << "Depth: " << depth << std::endl
-				 << "R: " << (unsigned int)pixel.r
-				 << ", G: " << (unsigned int)pixel.g
-				 << ", B: " << (unsigned int)pixel.b << std::endl;
+  boost::beast::ostream(buffer_) << s.GetString() << std::endl;
 
   // write pixel values
   ws_.text(ws_.got_text());

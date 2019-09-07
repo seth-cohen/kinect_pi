@@ -9,6 +9,23 @@
 
 using tcp = boost::asio::ip::tcp;               // from <boost/asio/ip/tcp.hpp>
 namespace websocket = boost::beast::websocket;  // from <boost/beast/websocket.hpp>
+using namespace openni;
+
+struct Point {
+  float x, y, z;
+  uint8_t r, g, b;
+};
+
+class PrintCallback : public VideoStream::NewFrameListener {
+public:
+  PrintCallback(const std::string& cbName, std::vector<Point> &pts);
+  void onNewFrame(VideoStream& stream);
+
+protected:
+  VideoFrameRef frame;
+  std::string name;
+  std::vector<Point> &pts;
+};
 
 // Echoes back all received WebSocket messages
 class Session : public std::enable_shared_from_this<Session> {
@@ -16,22 +33,20 @@ class Session : public std::enable_shared_from_this<Session> {
   boost::asio::io_service::strand strand_;
   boost::beast::multi_buffer buffer_;
 
-  openni::DepthPixel depth;
-  openni::RGB888Pixel pixel;
   Kinect kinect;
+  std::vector<Point> points;
+  PrintCallback depthListener;
+  PrintCallback colorListener;
 
 public:
   // Take ownership of the socket
   explicit Session(tcp::socket socket)
     : ws_(std::move(socket))
     , strand_(ws_.get_io_service())
-    , depth{99}
-    , pixel{9,9,9}
+    , points{640 * 480, {0.0, 0.0, 0.0, 0, 0, 0}}
+    , depthListener("depth", points)
+    , colorListener("color", points)
   {
-    std::cout << "Depth: " << depth << std::endl
-	      << "R: " << (unsigned int)pixel.r
-	      << ", G: " << (unsigned int)pixel.g
-	      << ", B: " << (unsigned int)pixel.b << std::endl;
   }
 
   // Start the asynchronous operation
